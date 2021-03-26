@@ -197,6 +197,13 @@ def sns_scan_results(
         },
     )
 
+def slack_notification(sns_topic, channel, message):
+    sns = boto3.client('sns')
+    response = sns.publish(
+            TargetArn=sns_topic,
+            Message=message,
+            Subject=channel,
+        )
 
 def lambda_handler(event, context):
     s3 = boto3.resource("s3")
@@ -206,6 +213,9 @@ def lambda_handler(event, context):
     # Get some environment variables
     ENV = os.getenv("ENV", "")
     EVENT_SOURCE = os.getenv("EVENT_SOURCE", "S3")
+    ENABLE_NOTIFICATION = os.getenv("ENABLE_NOTIFICATION", "false")
+    SLACK_SNS_TOPIC = os.getenv("SLACK_SNS_TOPIC", "")
+    SLACK_CHANNEL = os.getenv("SLACK_CHANNEL", "")
 
     start_time = get_timestamp()
     print("Script starting at %s\n" % (start_time))
@@ -269,6 +279,14 @@ def lambda_handler(event, context):
     stop_scan_time = get_timestamp()
     print("Script finished at %s\n" % stop_scan_time)
 
+    if ENABLE_NOTIFICATION == "true":
+        s3_key = s3_object.key.split("/")
+        environment = s3_key[0]
+        user_name = s3_key[1]
+        file_name = '/'.join(s3_key[2:])
+        if environment == "production":
+            notification_msg = "Track SFTP Push Event \n>*User Name:* " + user_name + "\n>*File Name:* " + file_name + "\n>*AV Status:* " + scan_result
+            slack_notification(SLACK_SNS_TOPIC, SLACK_CHANNEL, notification_msg)
 
 def str_to_bool(s):
     return bool(strtobool(str(s)))

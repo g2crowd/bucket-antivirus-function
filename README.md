@@ -236,6 +236,29 @@ definitions. If your bucket is `s3://my-bucket`, the value should be `my-bucket`
 13. Save the function.  Testing is easiest performed by uploading a
 file to the bucket configured as the trigger in step 4.
 
+### Enable Slack Notification
+1. Attach following policy document to role name `bucket-antivirus-function`
+
+    ```json
+    {
+       "Version":"2012-10-17",
+       "Statement":[
+         {
+            "Sid":"snsPublish",
+            "Action": [
+               "sns:Publish"
+            ],
+            "Effect":"Allow",
+            "Resource": [
+              "*"
+            ]
+         }
+       ]
+    }
+    ```
+
+2. Add a environment variable named `ENABLE_NOTIFICATION`, `SLACK_SNS_TOPIC`, `SLACK_CHANNEL`. More info [here](https://g2crowd.atlassian.net/wiki/spaces/DEV/pages/624754725/Send+Notification+to+Slack).
+
 ### S3 Events
 
 Configure scanning of additional buckets by adding a new S3 event to
