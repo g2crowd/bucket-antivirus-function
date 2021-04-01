@@ -39,6 +39,7 @@ from common import AV_STATUS_SNS_PUBLISH_INFECTED
 from common import AV_TIMESTAMP_METADATA
 from common import create_dir
 from common import get_timestamp
+from decryption import decrypt_file
 
 
 def event_object(event, event_source="s3"):
@@ -205,6 +206,19 @@ def slack_notification(sns_topic, channel, message):
             Subject=channel,
         )
 
+def is_encrypted(file_path):
+    """
+    Checks if a file is encrypted (currently only checks PGP)
+    """
+    key, extension = os.path.splitext(file_path)
+    return extension in ['.gpg', '.asc']
+
+def is_empty_dir(file_path, scan_result):
+    """
+    Checks if a file is empty directory and its clean
+    """
+    return scan_result == "CLEAN" and file_path.endswith("/.dir")
+
 def lambda_handler(event, context):
     s3 = boto3.resource("s3")
     s3_client = boto3.client("s3")
@@ -214,6 +228,7 @@ def lambda_handler(event, context):
     ENV = os.getenv("ENV", "")
     EVENT_SOURCE = os.getenv("EVENT_SOURCE", "S3")
     ENABLE_NOTIFICATION = os.getenv("ENABLE_NOTIFICATION", "false")
+    ENABLE_DECRYPTION = os.getenv("ENABLE_DECRYPTION", "true")
     SLACK_SNS_TOPIC = os.getenv("SLACK_SNS_TOPIC", "")
     SLACK_CHANNEL = os.getenv("SLACK_CHANNEL", "")
 
@@ -269,6 +284,21 @@ def lambda_handler(event, context):
     metrics.send(
         env=ENV, bucket=s3_object.bucket_name, key=s3_object.key, status=scan_result
     )
+
+    if ENABLE_NOTIFICATION == "true" and not is_encrypted(file_path) and not is_empty_dir(file_path, scan_result):
+        s3_key = s3_object.key.split("/")
+        environment = s3_key[0]
+        user_name = s3_key[1]
+        file_name = '/'.join(s3_key[2:])
+        if environment == "production":
+            notification_msg = "Track SFTP Push Event \n>*User Name:* " + user_name + "\n>*File Name:* " + file_name + "\n>*AV Status:* " + scan_result
+            slack_notification(SLACK_SNS_TOPIC, SLACK_CHANNEL, notification_msg)
+
+    if ENABLE_DECRYPTION == "true" and is_encrypted(file_path):
+        result, status = decrypt_file(file_path, s3_object.bucket_name, s3_object.key)
+        if not result:
+            slack_notification(SLACK_SNS_TOPIC, SLACK_CHANNEL, status)
+
     # Delete downloaded file to free up room on re-usable lambda function container
     try:
         os.remove(file_path)
@@ -278,15 +308,6 @@ def lambda_handler(event, context):
         delete_s3_object(s3_object)
     stop_scan_time = get_timestamp()
     print("Script finished at %s\n" % stop_scan_time)
-
-    if ENABLE_NOTIFICATION == "true":
-        s3_key = s3_object.key.split("/")
-        environment = s3_key[0]
-        user_name = s3_key[1]
-        file_name = '/'.join(s3_key[2:])
-        if environment == "production":
-            notification_msg = "Track SFTP Push Event \n>*User Name:* " + user_name + "\n>*File Name:* " + file_name + "\n>*AV Status:* " + scan_result
-            slack_notification(SLACK_SNS_TOPIC, SLACK_CHANNEL, notification_msg)
 
 def str_to_bool(s):
     return bool(strtobool(str(s)))
