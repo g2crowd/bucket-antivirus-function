@@ -229,6 +229,7 @@ def lambda_handler(event, context):
     EVENT_SOURCE = os.getenv("EVENT_SOURCE", "S3")
     ENABLE_NOTIFICATION = os.getenv("ENABLE_NOTIFICATION", "false")
     ENABLE_DECRYPTION = os.getenv("ENABLE_DECRYPTION", "true")
+    ENABLE_APP_INTEGRATION = os.getenv("ENABLE_APP_INTEGRATION", "false")
     SLACK_SNS_TOPIC = os.getenv("SLACK_SNS_TOPIC", "")
     SLACK_CHANNEL = os.getenv("SLACK_CHANNEL", "")
 
@@ -285,19 +286,32 @@ def lambda_handler(event, context):
         env=ENV, bucket=s3_object.bucket_name, key=s3_object.key, status=scan_result
     )
 
-    if ENABLE_NOTIFICATION == "true" and not is_encrypted(file_path) and not is_empty_dir(file_path, scan_result):
-        s3_key = s3_object.key.split("/")
-        environment = s3_key[0]
-        user_name = s3_key[1]
-        file_name = '/'.join(s3_key[2:])
-        if environment == "production":
-            notification_msg = "Track SFTP Push Event \n>*User Name:* " + user_name + "\n>*File Name:* " + file_name + "\n>*AV Status:* " + scan_result
-            slack_notification(SLACK_SNS_TOPIC, SLACK_CHANNEL, notification_msg)
-
     if ENABLE_DECRYPTION == "true" and is_encrypted(file_path):
         result, status = decrypt_file(file_path, s3_object.bucket_name, s3_object.key)
         if not result:
             slack_notification(SLACK_SNS_TOPIC, SLACK_CHANNEL, status)
+
+    if not is_encrypted(file_path) and not is_empty_dir(file_path, scan_result):
+        s3_key = s3_object.key.split("/")
+        environment = s3_key[0]
+        user_name = s3_key[1]
+        file_name = '/'.join(s3_key[2:])
+
+        if ENABLE_NOTIFICATION == "true":
+            if environment == "production":
+                notification_msg = "Track SFTP Push Event \n>*User Name:* " + user_name + "\n>*File Name:* " + file_name + "\n>*AV Status:* " + scan_result
+                slack_notification(SLACK_SNS_TOPIC, SLACK_CHANNEL, notification_msg)
+
+        if ENABLE_APP_INTEGRATION == "true":
+            sns = boto3.client('sns')
+            sns_topic_prefix = "arn:aws:sns:us-east-1:002417289773:"
+            sns_topic_suffix = "_track_sftp"
+
+            response = sns.publish(
+                        TargetArn=sns_topic_prefix+environment+sns_topic_suffix,
+                        Message=file_name,
+                        Subject=environment,
+                    )
 
     # Delete downloaded file to free up room on re-usable lambda function container
     try:
