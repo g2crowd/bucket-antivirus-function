@@ -307,9 +307,16 @@ def lambda_handler(event, context):
             sns_topic_prefix = "arn:aws:sns:us-east-1:002417289773:"
             sns_topic_suffix = "_track_sftp"
 
+            # Construct payload for app integration
+            payload = {}
+            payload['s3_key'] = s3_key
+            payload['user_name'] = user_name
+            payload['environment'] = environment
+            payload['file_name'] = file_name
+
             response = sns.publish(
                         TargetArn=sns_topic_prefix+environment+sns_topic_suffix,
-                        Message=file_name,
+                        Message=json.dumps(payload),
                         Subject=environment,
                     )
 
