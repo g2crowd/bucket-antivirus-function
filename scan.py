@@ -211,7 +211,7 @@ def is_encrypted(file_path):
     Checks if a file is encrypted (currently only checks PGP)
     """
     key, extension = os.path.splitext(file_path)
-    return extension in ['.gpg', '.asc']
+    return extension in ['.pgp', '.gpg', '.asc']
 
 def is_empty_dir(file_path, scan_result):
     """
