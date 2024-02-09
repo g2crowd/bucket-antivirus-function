@@ -298,7 +298,7 @@ def lambda_handler(event, context):
         file_name = '/'.join(s3_key[2:])
 
         if ENABLE_NOTIFICATION == "true":
-            if environment == "production":
+            if environment == "production" and s3_object.bucket_name == "g2-track-financial-data":
                 notification_msg = "Track SFTP Push Event \n>*User Name:* " + user_name + "\n>*File Name:* " + file_name + "\n>*AV Status:* " + scan_result
                 slack_notification(SLACK_SNS_TOPIC, SLACK_CHANNEL, notification_msg)
 
@@ -309,6 +309,7 @@ def lambda_handler(event, context):
 
             # Construct payload for app integration
             payload = {}
+            payload['bucket_name'] = s3_object.bucket_name
             payload['s3_key'] = s3_key
             payload['user_name'] = user_name
             payload['environment'] = environment
